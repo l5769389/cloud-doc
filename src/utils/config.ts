@@ -1,0 +1,1 @@
+export  const basePath =`/Users/ljun/Documents/test-mde/`;

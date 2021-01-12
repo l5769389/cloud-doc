@@ -5,15 +5,32 @@
   "scripts": {
     "serve": "vue-cli-service serve",
     "build": "vue-cli-service build",
-    "lint": "vue-cli-service lint"
+    "lint": "vue-cli-service lint",
+    "dev": "electron ."
   },
+  "main": "main.ts",
   "dependencies": {
+    "@types/simplemde": "^1.11.7",
+    "ant-design-vue": "^2.0.0-rc.7",
+    "chokidar": "^3.5.0",
     "core-js": "^3.6.5",
+    "cos-js-sdk-v5": "^1.1.5",
+    "easymde": "^2.13.0",
+    "electron": "^11.1.1",
+    "electron-is-dev": "^1.2.0",
+    "element-plus": "^1.0.1-beta.20",
+    "github-markdown-css": "^4.0.0",
+    "lodash": "^4.17.20",
+    "marked": "^1.2.7",
+    "simplemde": "^1.11.2",
+    "uuid": "^8.3.2",
     "vue": "^3.0.0",
     "vue-router": "^4.0.0-0",
     "vuex": "^4.0.0-0"
   },
   "devDependencies": {
+    "@fortawesome/fontawesome-free": "^5.15.1",
+    "@types/uuid": "^8.3.0",
     "@typescript-eslint/eslint-plugin": "^2.33.0",
     "@typescript-eslint/parser": "^2.33.0",
     "@vue/cli-plugin-babel": "~4.5.0",
