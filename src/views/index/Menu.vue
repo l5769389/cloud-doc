@@ -1,16 +1,38 @@
 <template >
-  <div class="container" ref="containerRef">
-    <menu-header></menu-header>
-    <div  ref="menuRef">
-      <a-directory-tree
-                        :tree-data="treeData"
-                        @select="onSelect"
-                        @expand="onExpand"
-                        :defaultSelectedKeys="defaultSelectedKeys"
-                        @rightClick="onRightClick"
+  <div class="container" >
+    <div class="header">
+      <menu-header @search-value="onSearch" @cancel-search="onCancelSearch"></menu-header>
+    </div>
+    <div class="content" ref="containerRef">
+      <search-result v-if="searchFlag" :searchResult="searchResult" :searchValue="searchValue"></search-result>
+      <div ref="menuRef"  v-else-if="treeData.length">
+        <div>
+          <a-directory-tree
+              :tree-data="treeData"
+              @select="onSelect"
+              @expand="onExpand"
+              :defaultSelectedKeys="defaultSelectedKeys"
+              @rightClick="onRightClick"
+          >
+            <template #title="{ title }">
+               <span v-if="title.indexOf(searchValue) > -1">
+                {{ title.substr(0, title.indexOf(searchValue)) }}
+                <span style="color: #f50">{{ searchValue }}</span>
+              {{ title.substr(title.indexOf(searchValue) + searchValue.length) }}
+        </span>
+              <span v-else>{{ title }}</span>
+            </template>
 
-      >
-      </a-directory-tree>
+          </a-directory-tree>
+        </div>
+
+      </div>
+      <div v-else class="no-file" @mouseenter="showNofileFlag=true" @mouseleave="showNofileFlag=false">
+        <span v-show="showNofileFlag">没有打开的文件夹</span>
+      </div>
+    </div>
+    <div class="footer">
+      <menu-footer @create-file="createFile"></menu-footer>
     </div>
     <a-modal
         :title=modalState.title
@@ -21,7 +43,6 @@
       <a-input :suffix="modalState.suffix" v-model:value="inputVal"  ref="InputRef"/>
     </a-modal>
   </div>
-
 </template>
 <style scoped lang="less">
  .container{
@@ -31,16 +52,39 @@
    flex-direction: column;
    background-color: rgb(248,248,248);
    padding-top: 10px;
+   box-sizing: border-box;
+   position: relative;
+   overflow: hidden;
    /deep/ li{
      border: 1px transparent solid;
    }
    /deep/ .active{
      border: 1px gray dashed;
    }
+   .header{
+     flex:0 0 25px;
+     order: 0;
+   }
+   .content{
+     flex: 1;
+     overflow: scroll;
+     order: 1;
+   }
+   .footer{
+     flex:0 0 31px;
+     border-top: 1px solid rgb(229,229,229);
+     order: 2;
+   }
+   .no-file{
+     width: 100%;
+     height: 100%;
+     display: flex;
+     justify-content: center;
+     align-items: center;
+   }
  }
 </style>
 <style>
-
 </style>
 <script lang="ts">
 import {defineComponent, ref, onMounted, nextTick, watch, reactive, createVNode, computed} from 'vue';
@@ -48,9 +92,12 @@ import MenuHeader from "@/components/MenuHeader.vue";
 import {FolderFilled,FileTextOutlined, ExclamationCircleOutlined} from '@ant-design/icons-vue'
 import {fileHelper} from '@/utils/FileHelper.ts';
 import { message,Modal } from 'ant-design-vue';
+import {useStore} from "vuex";
+import MenuFooter from "@/views/index/MenuFooter.vue";
+import SearchResult from "@/views/index/SearchResult.vue";
 export default defineComponent({
-   name: 'Menu',
-  components: {MenuHeader,FolderFilled,FileTextOutlined,message,Modal},
+  name: 'Menu',
+  components: {SearchResult, MenuFooter, MenuHeader,FolderFilled,FileTextOutlined,message,Modal},
   setup(props,context){
     const treeData: any =ref([]);
     const filehelper: any = new fileHelper();
@@ -73,13 +120,14 @@ export default defineComponent({
     const {Menu,MenuItem} =remote;
     let rightScopeFlag:any =false;
     let rightClickKey:any;
-    let rightClickDom: any;
     // 是获取上下文菜单时的li元素获取情况。
     let result :any;
     // arr is menu arr, showDom is area to show the menu
     // menu结构分为文件列表showDom+左边空白区域
     let showDom: any;
     let containerDom: any;
+    const store =useStore();
+    const showNofileFlag =ref(false);
     const listMenuArr =[
       new MenuItem({
         label:'打开',
@@ -91,7 +139,7 @@ export default defineComponent({
         click:()=>{
           // 重命名 包括：1.双击重命名 2.右键重命名。
           modalState.visible=true;
-          showRenameModal(rightClickDom);
+          showRenameModal(rightClickKey);
         }
       }),
       new MenuItem({
@@ -115,28 +163,45 @@ export default defineComponent({
         }
       })
     ]
-
     const _ =require('lodash');
-    ipcRenderer.on('getFile', (event:any, message: any) => {
-      updateFileName();
-    })
+
+    const setRenderListen =()=>{
+      ipcRenderer.on('getFile', (event:any, message: any) => {
+        const handler = setTimeout(()=>{
+          updateFileName();
+          if (handler){
+            clearTimeout(handler);
+          }
+        },500)
+      })
+      ipcRenderer.on('new-file',()=>{
+        createFile();
+      })
+      ipcRenderer.on('new-dir',()=>{
+        createDir();
+      })
+    }
+
     // get filelist
-    const updateFileName =_.throttle(async (path=filehelper.basePath)=>{
+    const updateFileName =_.throttle(async ()=>{
       console.log('trigger');
-      const ans =  await filehelper.readFile(path);
+      const ans =  await filehelper.readFile();
       treeData.value =ans;
+      showDom=menuRef.value;
       //将ans扁平化处理
       flattenTreeData =flatten(ans);
     },1000)
-    updateFileName();
 
+    const init=()=>{
+      setRenderListen();
+      updateFileName();
+      nextTick(()=>{
+        containerDom=containerRef.value;
+        useContextmenu(listMenuArr);
+      })
+    }
+    init();
     //dbclick or right tap trigger
-    nextTick(()=>{
-     showDom=menuRef.value;
-     containerDom=containerRef.value;
-     useContextmenu(listMenuArr);
-   })
-
 
 
     // create file/ dir code
@@ -152,16 +217,16 @@ export default defineComponent({
       nextTick(()=>{
         InputRef.value.focus();
       })
+      // 有key表示 点击的可能是menu区域，但可能是之前值。加上flag确认。
       if (rightClickKey && rightScopeFlag){
         const clickObj =flattenTreeData.filter((item: any)=>item.key===rightClickKey)[0];
-
         if(clickObj.isLeaf){
           createPath = clickObj.path.split('/').slice(0,-1).join('/');
         }else {
           createPath = clickObj.path;
         }
       }else {
-        createPath =filehelper.basePath;
+        createPath =filehelper.getbasePath();
       }
     }
     const handleCreateFile=()=>{
@@ -181,7 +246,6 @@ export default defineComponent({
             modalState.visible =false;
           })
     }
-
     const createDir=()=>{
       modalState.title=`创建文件夹`;
       modalState.visible=true;
@@ -198,7 +262,7 @@ export default defineComponent({
           createPath = clickObj.path;
         }
       }else {
-        createPath =filehelper.basePath;
+        createPath =filehelper.getbasePath();
       }
     }
     const handleCreateDir=()=>{
@@ -218,7 +282,6 @@ export default defineComponent({
             modalState.visible =false;
           })
     };
-
     // unlink file
     const  unlinkFileOrDir=()=>{
       const clickObj =flattenTreeData.filter((item: any)=>item.key===rightClickKey)[0];
@@ -273,32 +336,24 @@ export default defineComponent({
         });
       }
     }
-
-
     // rename code
-    let dbClickResult: any;
     let preName:any;
-    const showRenameModal =(clickDom: any)=>{
-      if (showDom.contains(clickDom)){
-        // dbclick remember the selectedkey
-        dbClickResult = getParentDom(clickDom);
-        preName = dbClickResult.children[1].title;
-        const reg =/.md$/;
-        if (reg.test(preName)){
+    const showRenameModal =(key: any)=>{
+      const selectObj =flattenTreeData.filter((item: any)=>item.key===key)[0];
+        preName = selectObj.title;
+        const isLeaf =selectObj.isLeaf;
+        if (isLeaf){
           modalState.suffix =`.md`;
           inputVal.value = preName.substr(0,preName.length-3);
         }else {
           modalState.suffix =``;
           inputVal.value = preName;
         }
-        if (dbClickResult){
           modalState.title='重命名';
           modalState.visible =true;
           nextTick(()=>{
             InputRef.value.focus();
           })
-        }
-      }
     }
     const handleRename =()=>{
       if (preName ===inputVal.value+modalState.suffix){
@@ -345,12 +400,13 @@ export default defineComponent({
         blankMenu.append(item);
         menu.append(item);
       })
-      window.addEventListener('contextmenu',(e:any)=>{
+      showDom =menuRef.value;
+      containerDom.addEventListener('contextmenu',(e:any)=>{
         // 判断点击区域，如果超出了左侧则不显示，然后分为：1.在左侧上面菜单部分 2.左侧非菜单部分
         if (containerDom.contains(e.target)===false){
           return;
         }
-        if (showDom.contains(e.target)){
+        if (menuRef.value && menuRef.value.contains(e.target)){
           rightScopeFlag =true;
           result = getParentDom(e.target);
           if (result){
@@ -367,13 +423,15 @@ export default defineComponent({
           })
         }
       })
-      window.addEventListener('click',(e:any)=>{
+      containerDom.addEventListener('click',(e:any)=>{
         if (result){
           removeClass(result);
         }
       })
-      window.addEventListener('dblclick',(e: any)=>{
-        showRenameModal(e.target);
+      containerDom.addEventListener('dblclick',(e: any)=>{
+        if (menuRef.value && menuRef.value.contains(e.target)){
+          showRenameModal(selectedKey);
+        }
       })
       const removeClass=(result: any)=>{
         let parentNode =result.parentNode;
@@ -397,11 +455,21 @@ export default defineComponent({
    function onSelect(keys: any, event: any) {
       selectedKey =keys[0];
       defaultSelectedKeys.value=[selectedKey];
-      context.emit('update:modelValue',keys[0]);
+      syncStore();
     }
+    function syncStore(){
+      const selectObj =flattenTreeData.filter((item: any)=>item.key===selectedKey)[0];
+      if (selectObj.isLeaf){
+          store.commit('setActiveObj',{
+            activeFileName:selectObj.title,
+            activeKey:selectObj.key,
+            activePath:selectObj.path,
+          })
+      }
+    }
+
    function onExpand(keys: any,obj: any) {
       console.log(keys);
-
     }
 
    const handleOk=(e: any)=>{
@@ -419,14 +487,30 @@ export default defineComponent({
             break;
       }
     }
-
    const onRightClick=({event,node}: any)=>{
      selectedKey =node.eventKey;
     //如果点击位置是在tree结构上才会有key，否则清除key。
     rightClickKey = node.eventKey;
+    console.log(rightClickKey);
     rightScopeFlag =true;
    }
-
+   const searchValue =ref('');
+   const searchFlag =ref(false);
+   const searchResult=ref('');
+   const onSearch =(args: any)=>{
+      if (args.trim() !==''){
+        searchFlag.value =true;
+        searchValue.value =args;
+        searchResult.value =  filehelper.matchSearch(args);
+        console.log(searchResult.value);
+      }else {
+        searchFlag.value =false;
+      }
+   }
+   const onCancelSearch=()=>{
+     searchFlag.value =false;
+     searchValue.value='';
+   }
      return{
        onExpand,
        onSelect,
@@ -440,6 +524,13 @@ export default defineComponent({
        InputRef,
        defaultSelectedKeys,
        onRightClick,
+       showNofileFlag,
+       createFile,
+       onSearch,
+       searchValue,
+       searchFlag,
+       searchResult,
+       onCancelSearch,
      }
   }
 });

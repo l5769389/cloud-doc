@@ -1,73 +1,145 @@
-// let data= [
-//     {
-//         'Id': '1',
-//         'Name': '教学素材管理',
-//         'Pid': '0',
-//         'id': '659354849B9A44AA9E2477223DF68C96',
-//         'children': [
-//             {
-//                 'Id': '4DDA93E00CD34E4D812EC1A9E10AA883',
-//                 'Name': '教学素材',
-//                 'Pid': '659354849B9A44AA9E2477223DF68C96',
-//                 'id': '4DDA93E00CD34E4D812EC1A9E10AA883',
-//                 'children': [
-//                     {
-//                         'Id': '6CD3A04CFBC1419F81E1A66BDC81F177',
-//                         'Name': '修改',
-//                         'Pid': '4DDA93E00CD34E4D812EC1A9E10AA883',
-//                         'id': '6CD3A04CFBC1419F81E1A66BDC81F177'
-//                     },
-//                     {
-//                         'Id': 'B93352644544420782337BC41C0534A9',
-//                         'Name': '添加',
-//                         'Pid': '4DDA93E00CD34E4D812EC1A9E10AA883',
-//                         'id': 'B93352644544420782337BC41C0534A9'
-//                     }
-//                 ]
-//             },
-//             {
-//                 'Id': '68F89C4E368048E699F3D7EDD69A86A7',
-//                 'Name': '测试试题',
-//                 'Pid': '659354849B9A44AA9E2477223DF68C96',
-//                 'id': '68F89C4E368048E699F3D7EDD69A86A7'
-//             },
-//             {
-//                 'Id': 'CF31D0CA5BC34765A61909B296E470C6',
-//                 'Name': '问题任务',
-//                 'Pid': '659354849B9A44AA9E2477223DF68C96',
-//                 'id': 'CF31D0CA5BC34765A61909B296E470C6'
-//             }
-//         ]
-//     },
-//     {
-//         'Id': 'B85EAE5FAAC64790AC62FA288E87AEAC',
-//         'Name': '基础数据管理',
-//         'Pid': '0',
-//         'id': 'B85EAE5FAAC64790AC62FA288E87AEAC',
-//         'children': [
-//             {
-//                 'Id': '134D7E54B9D041539940D29E24592DF4',
-//                 'Name': '专业设置',
-//                 'Pid': 'B85EAE5FAAC64790AC62FA288E87AEAC',
-//                 'id': '134D7E54B9D041539940D29E24592DF4'
-//             },
-//             {
-//                 'Id': '2314DE1399484596A7440326E07590DB',
-//                 'Name': '专业管理',
-//                 'Pid': 'B85EAE5FAAC64790AC62FA288E87AEAC',
-//                 'id': '2314DE1399484596A7440326E07590DB'
-//             }
-//         ]
-//     }
-// ]
-//
-// function flatten(data){
-//   // return data.reduce((arr,{Id,Name,Pid,id,children=[]})=>
-//   //       arr.concat([{Id,Name,Pid,id}],flatten(children)),[])
-//   //
-//     return data.reduce(function (arr,{Id,Name,Pid,id,children=[]}){
-//       return arr.concat([{Id,Name,Pid,id}],flatten(children))
-//     },[])
-// }
-// const arr =flatten(data);
-// console.log(arr);
+const { app, Menu,ipcMain } = require('electron')
+
+
+const isMac = process.platform === 'darwin'
+const template = [
+    // { role: 'appMenu' }
+    ...(isMac ? [{
+        label: app.name,
+        submenu: [
+            { role: 'about' },
+            { type: 'separator' },
+            { role: 'services' },
+            { type: 'separator' },
+            { role: 'hide' },
+            { role: 'hideothers' },
+            { role: 'unhide' },
+            { type: 'separator' },
+            { role: 'quit' }
+        ]
+    }] : []),
+    // { role: 'fileMenu' }
+    {
+        label: 'File',
+        submenu: [
+            isMac ? { role: 'close' } : { role: 'quit' },
+            {
+                label: '新建文件',
+                click:()=>{
+                    ipcMain.emit('new-file')
+                }
+            },
+            {
+                label: '新建文件夹',
+                click:()=>{
+                    ipcMain.emit('new-dir')
+                }
+            },
+        ]
+    },
+    // { role: 'editMenu' }
+    {
+        label: 'Edit',
+        submenu: [
+            { role: 'undo' },
+            { role: 'redo' },
+            { type: 'separator' },
+            { role: 'cut' },
+            { role: 'copy' },
+            { role: 'paste' },
+            ...(isMac ? [
+                { role: 'pasteAndMatchStyle' },
+                { role: 'delete' },
+                { role: 'selectAll' },
+                { type: 'separator' },
+                {
+                    label: 'Speech',
+                    submenu: [
+                        { role: 'startSpeaking' },
+                        { role: 'stopSpeaking' }
+                    ]
+                }
+            ] : [
+                { role: 'delete' },
+                { type: 'separator' },
+                { role: 'selectAll' }
+            ])
+        ]
+    },
+    // { role: 'viewMenu' }
+    {
+        label: 'View',
+        submenu: [
+            { role: 'reload' },
+            { role: 'forceReload' },
+            { role: 'toggleDevTools' },
+            { type: 'separator' },
+            { role: 'resetZoom' },
+            { role: 'zoomIn' },
+            { role: 'zoomOut' },
+            { type: 'separator' },
+            { role: 'togglefullscreen' }
+        ]
+    },
+    // {role: 'cloud'},
+    {
+        label: '云设置',
+        submenu:[
+            {
+                label: '自动同步',
+                type: 'checkbox',
+                checked:true,
+                enabled:false
+            },
+            {
+                label: '上传该文件',
+                enabled:false,
+                click:()=>{
+                    ipcMain.emit('upload-file')
+                }
+            },
+            {
+                label: '上传全部文件',
+                enabled:false,
+                click:()=>{
+                    ipcMain.emit('upload-dir')
+                }
+            }
+        ]
+    },
+    // { role: 'windowMenu' }
+    {
+        label: 'Window',
+        submenu: [
+            { role: 'minimize' },
+            { role: 'zoom' },
+            {
+                label: '设置云账号',
+                click:()=>{
+                    ipcMain.emit('setting')
+                }
+            },
+            ...(isMac ? [
+                { type: 'separator' },
+                { role: 'front' },
+                { type: 'separator' },
+                { role: 'window' }
+            ] : [
+                { role: 'close' }
+            ])
+        ]
+    },
+    {
+        role: 'help',
+        submenu: [
+            {
+                label: 'Learn More',
+                click: async () => {
+                    const { shell } = require('electron')
+                    await shell.openExternal('https://electronjs.org')
+                }
+            }
+        ]
+    }
+]
+module.exports=template;

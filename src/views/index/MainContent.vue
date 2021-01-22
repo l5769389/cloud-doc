@@ -1,38 +1,42 @@
 <template>
-  <MDE  :activekey="activekey" :autofocus="autoFocus" :value="nowValue" v-model="value" ref="mdeRef"></MDE>
+  <div class="container">
+    <div class="header" v-if="fileName">{{fileName}}</div>
+    <MDE ref="mdeRef"></MDE>
+  </div>
 </template>
 
-<style scoped>
-
+<style scoped lang="less">
+.container{
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  .header{
+    flex: 0 0 24px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 15px;
+    color: rgb(182,182,182);
+    font-weight: 500;
+  }
+}
 </style>
 <script lang="ts">
 import {computed, defineComponent, ref, watch} from 'vue';
 import MDE from "@/components/MDE.vue";
+import {useStore} from "vuex";
 export default defineComponent({
   name: 'MainContent.vue',
   components:{
     MDE
   },
-  props:{
-    activekey:String,
-  },
   setup(props,context){
-    const value =ref(''); //只用来获取子组件值。
-    const nowValue =ref('');//设置子组件值
-    const autoFocus = ref(false);
-    watch(()=>props.activekey,(value1,preVal) => {
-     const content = localStorage.getItem(`smde_${value1}`);
-     if (content){
-       nowValue.value =content;
-     }else {
-       nowValue.value='';
-     }
-    })
-    return{
-      autoFocus,
+    const store = useStore();
+    const fileName =computed(()=>store.getters.getActiveObj.activeFileName);
 
-      value,
-      nowValue,
+    return{
+      fileName,
     }
   }
 });

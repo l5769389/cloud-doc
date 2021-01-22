@@ -1,10 +1,11 @@
 const fs = window.require('fs');
 const path =window.require('path');
-import {basePath} from "@/utils/config";
 
 export class fileHelper {
-   basePath=basePath;
+   configPath='/Users/ljun/WebstormProjects/cloud-doc/src/utils/config';
+
    readFile = async ()=>{
+      let basePath=this.getbasePath();
       let ans: any =[];
       async function rescur(path1: any,obj: any){
          const files =await fs.promises.readdir(path1);
@@ -28,16 +29,18 @@ export class fileHelper {
                })
                await rescur(filePath+'/',obj[obj.length-1].children)
             }else {
-               obj.push({
-                  title:files[i],
-                  path:filePath,
-                  isLeaf:true,
-                  key:stat.ino,
-               })
+              if (path.extname(files[i]) ==='.md'){
+                 obj.push({
+                    title:files[i],
+                    path:filePath,
+                    isLeaf:true,
+                    key:stat.ino,
+                 })
+              }
             }
          }
       }
-      await rescur(this.basePath,ans);
+      await rescur(basePath,ans);
       return ans;
    }
    // 如果名字相同则覆盖。
@@ -113,6 +116,107 @@ export class fileHelper {
             code:-1,
             msg:e.code
          }
+      }
+   }
+   readFileContent=(filePath:any)=>{
+      try{
+         fs.accessSync(filePath);
+         const content = fs.readFileSync(filePath,'utf8');
+         return {
+            code:0,
+            content,
+         }
+      }catch (e) {
+         return {
+            code:-1,
+            msg:e.code
+         }
+      }
+   }
+   writeFile=(filePath: any,data: any)=>{
+      try{
+         fs.accessSync(filePath);
+         fs.writeFileSync(filePath,data)
+      }catch (e) {
+         return {
+            code:-1,
+            msg:e.code
+         }
+      }
+   }
+   writeConfig=(content: any)=>{
+      let newContent =`${content}`
+     try{
+        fs.accessSync(this.configPath);
+        fs.writeFileSync(this.configPath,newContent)
+        return {
+           code:0,
+           msg: 'ok',
+        }
+     }catch (e) {
+        return {
+           code:-1,
+           msg:e.code
+        }
+     }
+   }
+   getbasePath=()=>{
+      let basePath;
+      try{
+         fs.accessSync(this.configPath)
+         basePath = fs.readFileSync(this.configPath,'utf8');
+         return basePath
+      }catch (e) {
+         console.log(e);
+      }
+   }
+   matchSearch=(string: any)=>{
+      const fileName: any =this.getbasePath()+`/`;
+     const reg = new RegExp(`.{5}${string}.{5}`,'g');
+     const regName = new RegExp(`${string}`,'g');
+      let ans: any=[];
+      recursiveReadFile(fileName)
+      console.log(ans);
+      return ans;
+      function recursiveReadFile(fileName:any){
+         if(!fs.existsSync(fileName)) return;
+         if(isMDFile(fileName)){
+            check(fileName);
+         }
+         if(isDirectory(fileName)){
+            const files = fs.readdirSync(fileName);
+            files.forEach(function(val: any,key: any){
+               const temp = path.join(fileName,val);
+               if(isDirectory(temp)) recursiveReadFile(temp);
+               if (isMDFile(temp)) check(temp);
+            })
+         }
+      }
+      function check(fileName: any){
+         const data = readFile(fileName);
+         const stat = fs.statSync(fileName);
+         const singleName =fileName.split('/').slice(-1)[0];
+         const nameTest =regName.test(singleName);
+         const result =data.match((reg));
+         if (nameTest || result!==null){
+            let obj = Object.assign({}, {
+               matched: result,
+               path: fileName,
+               key: stat.ino,
+               filename:singleName,
+            });
+            ans.push(obj);
+         }
+      }
+      function isDirectory(fileName: any){
+         if(fs.existsSync(fileName)) return fs.statSync(fileName).isDirectory();
+      }
+      function isMDFile(fileName: any){
+         const singleName =fileName.split('/').slice(-1)[0];
+         if(fs.existsSync(fileName)) return fs.statSync(fileName).isFile() && path.extname(singleName) ==='.md';
+      }
+      function readFile(fileName: any){
+         if(fs.existsSync(fileName)) return fs.readFileSync(fileName,"utf-8");
       }
    }
 }

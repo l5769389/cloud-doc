@@ -1,139 +1,177 @@
 <template >
-  <div class="container">
+  <div class="mde-container">
     <textarea name="" rows="" cols="" id="editor"></textarea>
   </div>
 </template>
 
 <style scoped lang="less">
 @import "~easymde/dist/easymde.min.css";
+.mde-container{
+  width: 100%;
+  height: 100%;
+  flex: 1;
+  position: relative;
+  overflow: scroll;
+  /deep/ .EasyMDEContainer{
+    position: relative;
+    height: 100%;
+    .editor-toolbar{
+      border: none!important;
+      background-color: rgb(246,246,246);
+    }
+    /deep/ .CodeMirror-wrap,.editor-preview-side{
+      border-top: 0;
+      height: calc(100% - 82px);
+    }
+  }
+}
 </style>
 <script lang="js">
-import {defineComponent, onMounted, watch, computed,nextTick} from 'vue';
+import {defineComponent, onMounted, watch, computed,nextTick,ref} from 'vue';
 import EasyMDE from "easymde";
-import COS  from'cos-js-sdk-v5';
 import {message} from 'ant-design-vue';
+import {useStore} from "vuex";
+import {fileHelper} from '@/utils/FileHelper.ts';
+import {uploadImg,uploadFile,uploadAllFile} from "@/utils/COS";
 
 export default defineComponent({
    name: 'MDE',
-  props:{
-    activekey:{
-      type:String,
-      default(){
-        return ''
-      }
-    },
-    autofocus:Boolean,
-    value:String,
-  },
   setup(props,context){
-   const key =computed(()=>props.activekey);
-   const value=computed(()=>props.value);
-    const {v4: uuidv4} = require('uuid');
-   onMounted(()=>{
-     const config =
-         {
-       autofocus:true,
-       autosave: {
-         enabled: true,
-         uniqueId :key.value,
-         delay: 1000,
-         timeFormat: {
-           locale: 'en-US',
-           format: {
-             year: 'numeric',
-             month: 'long',
-             day: '2-digit',
-             hour: '2-digit',
-             minute: '2-digit',
-           },
-         },
-         text: "Autosaved: "
-       },
-       element: document.getElementById("editor"),
-       indentWithTabs: false,
-       insertTexts: {
-         horizontalRule: ["", "\n\n-----\n\n"],
-         image: ["![](http://", ")"],
-         link: ["[", "](http://)"],
-         table: ["", "\n\n| Column 1 | Column 2 | Column 3 |\n| -------- | -------- | -------- |\n| Text     | Text      | Text     |\n\n"],
-       },
-       lineWrapping: false,
-       minHeight: "500px",
-       uploadImage:true,
-       imageUploadFunction:function (e,x){
-         const cos = new COS({
-           SecretId: 'AKIDe3Biji5EROBobHsrjMinmbASUJsI3QgP',
-           SecretKey: 'dIgvRvGMDoHUEiEVWR5TXjeIkvr0tjhN'
-         })
-         const id  =uuidv4();
-         cos.putObject({
-           Bucket: 'markdown-1304442942', /* 必须 */
-           Region: 'ap-shanghai',    /* 必须 */
-           Key:id,              /* 必须 */
-           StorageClass: 'STANDARD',
-           Body: e, // 上传文件对象
-           onProgress: function(progressData) {
-             console.log(JSON.stringify(progressData));
-           }
-         },async function(err, data) {
-           if (err){
-             message.info('上传失败，请重试')
-             throw err
-           }
-           if (data){
-             message.info('上传成功');
-            const url =`https://markdown-1304442942.cos.ap-shanghai.myqcloud.com/${id}`;
-            editor.value(editor.value()+`![123](${url})`);
-            editor.codemirror.focus();
-           }
-         });
-       },
-       parsingConfig: {
-         allowAtxHeaderWithoutSpace: true,
-         strikethrough: false,
-         underscoresBreakWords: true,
-       },
-       placeholder: "Type here...",
-       renderingConfig: {
-         singleLineBreaks: false,
-         codeSyntaxHighlighting: true,
-       },
-       previewImagesInEditor:false, //true 会导致闪烁
-       shortcuts: {
-         drawTable: "Cmd-Alt-T"
-       },
-       showIcons: ["code", "table"],
-       spellChecker: false,
-       styleSelectedText: false,
-       sideBySideFullscreen: false,
-       syncSideBySidePreviewScroll: false,
-       tabSize: 4,
-     }
-        const editor= new EasyMDE(config);
-        editor.codemirror.on('change',function (instance,changeObj){
-          context.emit('update:modelValue',editor.value());
-        })
-     editor.codemirror.on('paste',function (instance,e){
-       console.log(e);
-       const items= e.clipboardData && e.clipboardData.items;
-       let file =null;
-       if (items && items.length){
-         for (let i=0;i<items.length;i++){
-           if (items[i].type.indexOf('image')!==-1){
-             file =items[i].getAsFile();
-             break;
-           }
-         }
-       }
-     })
-        watch(()=>props.activekey,(value) => {
-          console.log(value);
-          config.autosave.uniqueId=value;
-        })
-        watch(()=>value.value,value1 => {
-          editor.value(value1);
-        })
+    const store =useStore();
+    let content=ref('');
+    const activeKey=computed(()=>store.getters.getActiveObj.activeKey);
+    const activePath=computed(()=>store.getters.getActiveObj.activePath);
+    const filehelper =new fileHelper();
+    const { remote, ipcRenderer } = window.require('electron')
+    const {FindInPage} =require('electron-find');
+    let findInPage = new FindInPage(remote.getCurrentWebContents(), {
+      preload: true,
+      offsetTop: 6,
+      offsetRight: 10
+    })
+    ipcRenderer.on('on-find', (e, args) => {
+      findInPage.openFindWindow()
+    })
+    onMounted(()=>{
+       init();
    })
+    //初始时 尝试读取文件内容作为初始化md中的内容。
+    // 编辑时 修改内存的变量。 定时进行保存。
+    function init(){
+      const hljs = require('highlight.js');
+      const md = window.require('markdown-it')(
+          {
+            highlight: function (str, lang) {
+              if (lang && hljs.getLanguage(lang)) {
+                try {
+                  return hljs.highlight(lang, str).value;
+                } catch (__) {}
+              }
+
+              return ''; // use external default escaping
+            }
+          }
+      )
+       .use(require('markdown-it-imsize'))
+       .use(require('markdown-it-footnote'))
+      const config = {
+        autofocus:true,
+        element: document.getElementById("editor"),
+        minHeight: "500px",
+        uploadImage:true,
+        status: ["lines", "cursor",'words'], // Another optional usage, with a custom status bar item that counts keystrokes
+        imageUploadFunction:function (e,x){
+         const result = uploadImg(editor,e);
+        result.then(data=>{
+          editor.value(editor.value()+`![123](${url})`);
+          editor.codemirror.focus();
+        })
+          .catch(err=>{
+            if (err.code ===-1){
+              message.info('请先填写COS信息');
+              setTimeout(()=>{
+                ipcRenderer.send('setting');
+              },500)
+            }
+            if (err.code===-2){
+              message.info('上传失败，请重试');
+              message.info('请检查COS信息');
+              setTimeout(()=>{
+                  ipcRenderer.send('setting');
+              },500)
+            }
+          })
+        },
+        placeholder: "Type here...",
+        styleSelectedText: false,
+        sideBySideFullscreen: false,
+        previewRender: function(plainText) {
+            return md.render(plainText);
+        }
+      }
+      const editor= new EasyMDE(config);
+      editor.codemirror.on('change',function (instance,changeObj){
+        content.value =editor.value();
+      })
+      editor.codemirror.on('paste',function (instance,e){
+        const items= e.clipboardData && e.clipboardData.items;
+        let file =null;
+        if (items && items.length){
+          for (let i=0;i<items.length;i++){
+            if (items[i].type.indexOf('image')!==-1){
+              file =items[i].getAsFile();
+              break;
+            }
+          }
+        }
+      })
+      watch(()=>activeKey.value,value => {
+          getContent();
+      })
+      autoSave();
+      const getContent =()=>{
+        const result =  filehelper.readFileContent(activePath.value);
+        if (result.code ===0){
+          editor.value(result.content)
+        }else {
+          message.error('出错了')
+        }
+      }
+    }
+
+    const autoSave=()=>{
+      watch(()=>content.value,value => {
+      const timer= setTimeout(()=>{
+          const result =filehelper.writeFile(activePath.value,value);
+        },500)
+      })
+    }
+    ipcRenderer.on('upload-file',()=>{
+      if (activeKey.value){
+      const result =  uploadFile(content.value)
+        result.then(data=>{
+          message.success('上传成功')
+        })
+            .catch(err=>{
+              if (err.code ===-1){
+                message.info('请先填写COS信息');
+                setTimeout(()=>{
+                  ipcRenderer.send('setting');
+                },500)
+              }
+              if (err.code===-2){
+                message.info('上传失败，请重试');
+                message.info('请检查COS信息');
+                setTimeout(()=>{
+                  ipcRenderer.send('setting');
+                },500)
+              }
+            })
+      }
+    })
+    ipcRenderer.on('upload-dir',()=>{
+      uploadAllFile();
+    })
     return {
     }
   }

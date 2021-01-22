@@ -1,10 +1,10 @@
 <template>
   <div class="outer-container">
       <div class="left">
-          <Menu v-model="activekey"></Menu>
+          <Menu></Menu>
       </div>
       <div class="right">
-        <main-content :activekey="activekey"></main-content>
+        <main-content ></main-content>
       </div>
   </div>
 </template>
@@ -16,9 +16,14 @@
     display: flex;
     .left{
       flex: 0 0 240px;
+      height: 100%;
+      position: relative;
+      order: 0;
     }
     .right{
       flex: 1;
+      height: 100%;
+      order: 1;
     }
   }
 </style>
@@ -30,9 +35,9 @@ export default defineComponent({
    name: 'index',
    components: {MainContent, Menu},
   setup(){
-     const activekey =ref();
+
      return{
-       activekey,
+
      }
   }
 });
